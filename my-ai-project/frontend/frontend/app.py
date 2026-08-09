@@ -1,69 +1,97 @@
 import streamlit as st
 import requests
 import os
-from streamlit_google_auth import Authenticate
 
 BACKEND_URL = "https://url-guardians-1.onrender.com"
 
 st.set_page_config(page_title="URL Guardians", page_icon="🛡️", layout="wide")
 
-# ── Google Auth Setup ─────────────────────────────────────
-authenticator = Authenticate(
-    secret_credentials_path=None,
-    cookie_name="url_guardians_cookie",
-    cookie_key=os.getenv("SECRET_KEY", "url-guardians-secret"),
-    redirect_uri=os.getenv("REDIRECT_URI", "http://localhost:8501"),
-    google_client_id=os.getenv("GOOGLE_CLIENT_ID"),
-    google_client_secret=os.getenv("GOOGLE_CLIENT_SECRET"),
-)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "token" not in st.session_state:
+    st.session_state.token = None
+if "username" not in st.session_state:
+    st.session_state.username = None
 
-# ── Session State ─────────────────────────────────────────
-if "connected" not in st.session_state:
-    st.session_state.connected = False
-if "user_info" not in st.session_state:
-    st.session_state.user_info = {}
-
-# ── Login Page ────────────────────────────────────────────
 def show_auth_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.markdown("<h1 style='text-align:center'>🛡️ URL Guardians</h1>", unsafe_allow_html=True)
         st.markdown("<p style='text-align:center'>AI-Powered Security Auditor | MCKV Institute of Engineering</p>", unsafe_allow_html=True)
         st.markdown("---")
-        st.markdown("<h3 style='text-align:center'>Sign in to continue</h3>", unsafe_allow_html=True)
-        st.markdown("<br>", unsafe_allow_html=True)
 
-        # Google Login Button
-        authenticator.check_authentification()
-        authenticator.login()
+        tab1, tab2 = st.tabs(["🔐 Login", "📝 Register"])
 
-# ── Main App ──────────────────────────────────────────────
+        with tab1:
+            st.subheader("Welcome Back!")
+            username = st.text_input("Username", key="login_user", placeholder="Enter username")
+            password = st.text_input("Password", type="password", key="login_pass", placeholder="Enter password")
+            if st.button("🔐 Login", use_container_width=True, type="primary"):
+                if not username or not password:
+                    st.error("❌ Please fill all fields!")
+                else:
+                    with st.spinner("Logging in..."):
+                        try:
+                            res = requests.post(
+                                f"{BACKEND_URL}/auth/login",
+                                json={"username": username, "password": password}
+                            )
+                            data = res.json()
+                            if res.status_code == 200:
+                                st.session_state.logged_in = True
+                                st.session_state.token = data["token"]
+                                st.session_state.username = data["username"]
+                                st.success("✅ Login successful!")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ {data.get('detail', 'Login failed!')}")
+                        except Exception:
+                            st.error("❌ Backend not running!")
+
+        with tab2:
+            st.subheader("Create Account")
+            new_username = st.text_input("Username", key="reg_user", placeholder="Choose a username")
+            new_email = st.text_input("Email", key="reg_email", placeholder="Enter your email")
+            new_password = st.text_input("Password", type="password", key="reg_pass", placeholder="Min 8 characters")
+            confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm", placeholder="Repeat password")
+            if st.button("📝 Register", use_container_width=True, type="primary"):
+                if not new_username or not new_email or not new_password:
+                    st.error("❌ Please fill all fields!")
+                elif new_password != confirm_password:
+                    st.error("❌ Passwords do not match!")
+                elif len(new_password) < 8:
+                    st.error("❌ Password must be at least 8 characters!")
+                else:
+                    with st.spinner("Creating account..."):
+                        try:
+                            res = requests.post(
+                                f"{BACKEND_URL}/auth/register",
+                                json={"username": new_username, "email": new_email, "password": new_password}
+                            )
+                            data = res.json()
+                            if res.status_code == 200:
+                                st.success("✅ Account created! Please login.")
+                            else:
+                                st.error(f"❌ {data.get('detail', 'Registration failed!')}")
+                        except Exception:
+                            st.error("❌ Backend not running!")
+
 def show_main_app():
-    user_name = st.session_state.get("user_info", {}).get("name", "User")
-    user_email = st.session_state.get("user_info", {}).get("email", "")
-    user_picture = st.session_state.get("user_info", {}).get("picture", "")
-
     col1, col2 = st.columns([4, 1])
-    with col1:
-        st.title("🛡️ URL Guardians")
-        if user_picture:
-            st.markdown(f"Welcome, **{user_name}** ({user_email})")
-    with col2:
-        if st.button("🚪 Logout"):
-            authenticator.logout()
-            st.rerun()
+    col1.title("🛡️ URL Guardians")
+    col1.caption(f"Welcome, **{st.session_state.username}** | MCKV Institute of Engineering")
+    if col2.button("🚪 Logout"):
+        st.session_state.logged_in = False
+        st.session_state.token = None
+        st.session_state.username = None
+        st.rerun()
 
     st.markdown("---")
-
     st.sidebar.title("⚙️ Settings")
-    st.sidebar.markdown(f"👤 **{user_name}**")
-    st.sidebar.markdown(f"📧 {user_email}")
+    st.sidebar.markdown(f"👤 **{st.session_state.username}**")
     st.sidebar.markdown("---")
-    mode = st.sidebar.selectbox(
-        "Scan Mode",
-        ["normal", "deep"],
-        format_func=lambda x: "🔍 Normal Scan" if x == "normal" else "🔬 Deep Scan"
-    )
+    mode = st.sidebar.selectbox("Scan Mode", ["normal", "deep"],
+        format_func=lambda x: "🔍 Normal Scan" if x == "normal" else "🔬 Deep Scan")
 
     st.markdown("### 🔍 Enter URL to Analyze")
     url = st.text_input("URL", placeholder="https://example.com")
@@ -83,6 +111,7 @@ def show_main_app():
                     res = requests.post(
                         f"{BACKEND_URL}/analyze",
                         json={"url": url, "mode": mode},
+                        headers={"Authorization": f"Bearer {st.session_state.token}"},
                         timeout=60
                     )
                     data = res.json()
@@ -114,6 +143,7 @@ def show_main_app():
                     res = requests.post(
                         f"{BACKEND_URL}/export-pdf",
                         json={"url": url, "mode": mode},
+                        headers={"Authorization": f"Bearer {st.session_state.token}"},
                         timeout=120
                     )
                     if res.status_code == 200:
@@ -128,8 +158,19 @@ def show_main_app():
                 except Exception as e:
                     st.error(f"❌ Error: {str(e)}")
 
-# ── Router ────────────────────────────────────────────────
-if st.session_state.get("connected"):
+    st.markdown("---")
+    if st.button("🏥 Check Backend Health"):
+        try:
+            res = requests.get(f"{BACKEND_URL}/health")
+            data = res.json()
+            if data["groq_api_key_loaded"]:
+                st.success(f"✅ {data['message']}")
+            else:
+                st.error(f"❌ {data['message']}")
+        except Exception:
+            st.error("❌ Backend not reachable!")
+
+if st.session_state.logged_in:
     show_main_app()
 else:
     show_auth_page()
