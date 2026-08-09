@@ -1,0 +1,10 @@
+.env
+*.env
+guardians_venv/
+venv/
+__pycache__/
+*.pyc
+users.db
+reports/
+*.pdf
+node_modules/
