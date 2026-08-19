@@ -35,7 +35,7 @@ Only return the JSON. No explanation. No markdown. No backticks.
 """
     try:
         response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="llama3-groq-70b-8192-tool-use-preview",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
         )
