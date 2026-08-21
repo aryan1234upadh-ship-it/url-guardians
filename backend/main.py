@@ -268,3 +268,8 @@ def admin_get_stats(admin: str = Depends(require_admin)):
         "total_scans": total_scans,
         "active_users": active_users
     }
+@app.post("/setup-admin/{username}")
+def setup_first_admin(username: str):
+    from database import make_admin
+    make_admin(username)
+    return {"success": True, "message": f"{username} is now admin!"}
