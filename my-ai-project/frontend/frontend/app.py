@@ -41,6 +41,7 @@ def show_auth_page():
                                 st.session_state.logged_in = True
                                 st.session_state.token = data["token"]
                                 st.session_state.username = data["username"]
+                                st.session_state.is_admin = data.get("is_admin", False)
                                 st.success("✅ Login successful!")
                                 st.rerun()
                             else:
@@ -75,6 +76,55 @@ def show_auth_page():
                                 st.error(f"❌ {data.get('detail', 'Registration failed!')}")
                         except Exception:
                             st.error("❌ Backend not running!")
+def show_admin_dashboard():
+    st.markdown("## 👑 Admin Dashboard")
+    st.markdown("---")
+
+    headers = {"Authorization": f"Bearer {st.session_state.token}"}
+
+    # Stats
+    try:
+        res = requests.get(f"{BACKEND_URL}/admin/stats", headers=headers)
+        stats = res.json()
+        col1, col2, col3 = st.columns(3)
+        col1.metric("👥 Total Users", stats["total_users"])
+        col2.metric("✅ Active Users", stats["active_users"])
+        col3.metric("🔍 Total Scans", stats["total_scans"])
+    except Exception as e:
+        st.error(f"Failed to load stats: {e}")
+
+    st.markdown("---")
+
+    tab1, tab2 = st.tabs(["👥 Users", "🔍 Scan History"])
+
+    with tab1:
+        try:
+            res = requests.get(f"{BACKEND_URL}/admin/users", headers=headers)
+            users = res.json()["users"]
+            for user in users:
+                col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+                col1.write(f"**{user['username']}**")
+                col2.write(user['email'])
+                col3.write("🟢 Active" if user['is_active'] else "🔴 Banned")
+                if user['username'] != st.session_state.username:
+                    if col4.button("🚫 Ban", key=f"ban_{user['username']}"):
+                        requests.delete(f"{BACKEND_URL}/admin/users/{user['username']}", headers=headers)
+                        st.success(f"Banned {user['username']}")
+                        st.rerun()
+        except Exception as e:
+            st.error(f"Failed to load users: {e}")
+
+    with tab2:
+        try:
+            res = requests.get(f"{BACKEND_URL}/admin/scans", headers=headers)
+            scans = res.json()["scans"]
+            if scans:
+                for scan in scans:
+                    st.write(f"🔗 **{scan['url']}** — Risk: {scan['risk_level']} — {scan['created_at']}")
+            else:
+                st.info("No scans yet")
+        except Exception as e:
+            st.error(f"Failed to load scans: {e}")                           
 
 def show_main_app():
     col1, col2 = st.columns([4, 1])
@@ -171,6 +221,10 @@ def show_main_app():
             st.error("❌ Backend not reachable!")
 
 if st.session_state.logged_in:
-    show_main_app()
+    page = st.sidebar.radio("📍 Navigate", ["🔍 Scanner", "👑 Admin"]) if st.session_state.get("is_admin") else "🔍 Scanner"
+    if page == "👑 Admin":
+        show_admin_dashboard()
+    else:
+        show_main_app()
 else:
     show_auth_page()
